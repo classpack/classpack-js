@@ -1,3 +1,3 @@
-# $[\texttt{x}]_\texttt{pack}$
+# $[c]_{pack}$
 
 Work in progress.

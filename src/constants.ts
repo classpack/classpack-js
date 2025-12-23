@@ -1,0 +1,29 @@
+export const SENTINEL = 0;
+export const NULL_CONST = 1;
+export const TRUE_CONST = 2;
+export const FALSE_CONST = 3;
+
+export const F32_TAG = 4;
+export const F64_TAG = 5;
+export const ZSTRING_TAG = 6;
+export const ZARRAY_TAG = 7;
+
+export const ZOBJECT_TAG = 8;
+export const BUF8_TAG = 9;
+export const BUF16_TAG = 10;
+export const BUF32_TAG = 11;
+
+export const EXT0_TAG = 12;
+export const EXT1_TAG = 13;
+export const EXT2_TAG = 14;
+export const EXT3_TAG = 15;
+
+export const OBJECT_OFFSET = 16;
+export const OBJECT_MAX = 15;
+export const CLASS_OFFSET = 32;
+export const CLASS_MAX = 15;
+export const STRING_OFFSET = 48;
+export const STRING_MAX = 31;
+export const ARRAY_OFFSET = 80;
+export const ARRAY_MAX = 15;
+export const SINT_OFFSET = 96;

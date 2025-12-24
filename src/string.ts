@@ -1,8 +1,8 @@
-import { STRING_MAX, STRING_OFFSET, ZSTRING_TAG, SENTINEL } from "./constants";
-import type { DecodeContext, EncodeContext } from "./context";
-import { ensureCapacity } from "./context";
+import { STRING_MAX, STRING_OFFSET, ZSTRING_TAG, SENTINEL } from "./layout";
+import type { DecodeContext, EncodeContext } from "./common";
+import { ensureCapacity } from "./common";
 
-export function decodeCString(context: DecodeContext): string {
+export const decodeCString = (context: DecodeContext): string => {
   const start = context.offset;
   while (context.buffer[context.offset] !== 0) {
     context.offset++;
@@ -10,29 +10,29 @@ export function decodeCString(context: DecodeContext): string {
   const keyBytes = context.buffer.slice(start, context.offset);
   context.offset++;
   return new TextDecoder().decode(keyBytes);
-}
+};
 
-export function encodeCString(context: EncodeContext, value: string) {
+export const encodeCString = (context: EncodeContext, value: string) => {
   const strBytes = new TextEncoder().encode(value);
   ensureCapacity(context, strBytes.length + 1);
   context.buffer.set(strBytes, context.offset);
   context.offset += strBytes.length;
   context.buffer[context.offset++] = 0;
-}
+};
 
-export function decodeStringOfLength(
+export const decodeStringOfLength = (
   context: DecodeContext,
   length: number
-): string {
+): string => {
   const strBytes = context.buffer.slice(
     context.offset,
     context.offset + length
   );
   context.offset += length;
   return new TextDecoder().decode(strBytes);
-}
+};
 
-export function encodeString(context: EncodeContext, value: string) {
+export const encodeString = (context: EncodeContext, value: string) => {
   const strBytes = new TextEncoder().encode(value);
 
   if (strBytes.length <= STRING_MAX) {
@@ -47,4 +47,4 @@ export function encodeString(context: EncodeContext, value: string) {
     context.offset += strBytes.length;
     context.buffer[context.offset++] = SENTINEL;
   }
-}
+};

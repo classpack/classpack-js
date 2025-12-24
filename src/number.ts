@@ -1,11 +1,8 @@
-import { F32_TAG, F64_TAG, SINT_OFFSET } from "./constants";
-import {
-  ensureCapacity,
-  type DecodeContext,
-  type EncodeContext,
-} from "./context";
+import { F32_TAG, F64_TAG, SINT_OFFSET } from "./layout";
+import { ensureCapacity } from "./common";
+import type { DecodeContext, EncodeContext, Options } from "./common";
 
-export function decodeVint(context: DecodeContext): number {
+export const decodeVint = (context: DecodeContext): number => {
   let value = 0;
   let shift = 0;
   while (true) {
@@ -15,9 +12,9 @@ export function decodeVint(context: DecodeContext): number {
     shift += 7;
   }
   return value;
-}
+};
 
-export function encodeVint(context: EncodeContext, value: number) {
+export const encodeVint = (context: EncodeContext, value: number) => {
   do {
     let byte = value & 0x7f;
     value >>= 7;
@@ -27,19 +24,27 @@ export function encodeVint(context: EncodeContext, value: number) {
     ensureCapacity(context, 1);
     context.buffer[context.offset++] = byte;
   } while (value !== 0);
-}
+};
 
-export function encodeNumber(context: EncodeContext, value: number) {
+export const encodeNumber = (
+  context: EncodeContext,
+  options: Options,
+  value: number
+) => {
   if (Number.isInteger(value)) {
     const isNegative = value < 0;
     const intValue = (Math.abs(value) << 1) + +isNegative;
     encodeVint(context, intValue + SINT_OFFSET);
   } else {
-    encodeF64(context, value);
+    if (options.useFloat32) {
+      encodeF32(context, value);
+    } else {
+      encodeF64(context, value);
+    }
   }
-}
+};
 
-export function encodeF64(context: EncodeContext, value: number) {
+export const encodeF64 = (context: EncodeContext, value: number) => {
   ensureCapacity(context, 9);
   context.buffer[context.offset++] = F64_TAG;
   const view = new DataView(
@@ -49,9 +54,9 @@ export function encodeF64(context: EncodeContext, value: number) {
   );
   view.setFloat64(0, value, true);
   context.offset += 8;
-}
+};
 
-export function encodeF32(context: EncodeContext, value: number) {
+export const encodeF32 = (context: EncodeContext, value: number) => {
   ensureCapacity(context, 5);
   context.buffer[context.offset++] = F32_TAG;
   const view = new DataView(
@@ -61,9 +66,9 @@ export function encodeF32(context: EncodeContext, value: number) {
   );
   view.setFloat32(0, value, true);
   context.offset += 4;
-}
+};
 
-export function decodeF32(context: DecodeContext): number {
+export const decodeF32 = (context: DecodeContext): number => {
   const view = new DataView(
     context.buffer.buffer,
     context.buffer.byteOffset + context.offset,
@@ -72,9 +77,9 @@ export function decodeF32(context: DecodeContext): number {
   const value = view.getFloat32(0, true);
   context.offset += 4;
   return value;
-}
+};
 
-export function decodeF64(context: DecodeContext): number {
+export const decodeF64 = (context: DecodeContext): number => {
   const view = new DataView(
     context.buffer.buffer,
     context.buffer.byteOffset + context.offset,
@@ -83,4 +88,4 @@ export function decodeF64(context: DecodeContext): number {
   const value = view.getFloat64(0, true);
   context.offset += 8;
   return value;
-}
+};

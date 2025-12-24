@@ -1,29 +1,22 @@
 import { Glob } from "bun";
-import { makeDecodeContext, makeEncodeContext } from "../src";
-import { decode, encode } from "../src";
+import { Classpack } from "../src";
 import { describe, it, expect } from "bun:test";
 
 const glob = new Glob("./fixtures/**/*.json");
 
 for await (const file of glob.scan(".")) {
   describe(`ClassPack Encoding/Decoding for ${file}`, async () => {
+    const classpack = new Classpack();
     const data = await Bun.file(file).json();
 
     const jsonLength = JSON.stringify(data).length;
+    const encoded = classpack.encode(data);
 
-    const encodeContext = makeEncodeContext(new Uint8Array(1024));
-
-    encode(encodeContext, data);
-
-    const writtenData = encodeContext.buffer.slice(0, encodeContext.offset);
-
-    console.log("Compression ratio:", jsonLength / writtenData.length);
-
-    const decodeContext = makeDecodeContext(writtenData);
-    const decodedData = decode(decodeContext);
+    console.log("Compression ratio:", jsonLength / encoded.length);
+    const decoded = classpack.decode(encoded);
 
     it("decoded data matches original data", () => {
-      expect(decodedData).toEqual(data);
+      expect(decoded).toEqual(data);
     });
   });
 }

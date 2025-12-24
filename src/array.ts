@@ -1,14 +1,18 @@
-import { decode, encode } from ".";
-import { ARRAY_MAX, ARRAY_OFFSET, ZARRAY_TAG, SENTINEL } from "./constants";
-import type { EncodeContext, DecodeContext } from "./context";
-import { ensureCapacity } from "./context";
+import { decodeAny, encodeAny } from "./any";
+import { ARRAY_MAX, ARRAY_OFFSET, ZARRAY_TAG, SENTINEL } from "./layout";
+import type { EncodeContext, DecodeContext, Options } from "./common";
+import { ensureCapacity } from "./common";
 
-export function encodeArray(context: EncodeContext, values: any[]) {
+export const encodeArray = (
+  context: EncodeContext,
+  options: Options,
+  values: any[]
+) => {
   if (values.length <= ARRAY_MAX) {
     ensureCapacity(context, 1);
     context.buffer[context.offset++] = ARRAY_OFFSET + values.length;
     for (const value of values) {
-      encode(context, value);
+      encodeAny(context, options, value);
     }
 
     return;
@@ -16,30 +20,34 @@ export function encodeArray(context: EncodeContext, values: any[]) {
   ensureCapacity(context, 1);
   context.buffer[context.offset++] = ZARRAY_TAG;
   for (const value of values) {
-    encode(context, value);
+    encodeAny(context, options, value);
   }
   context.buffer[context.offset++] = SENTINEL;
-}
+};
 
-export function decodeZArray(context: DecodeContext): any[] {
+export const decodeZArray = (
+  context: DecodeContext,
+  options: Options
+): any[] => {
   const array = [];
   while (true) {
     if (context.buffer[context.offset] === SENTINEL) {
       context.offset++;
       break;
     }
-    array.push(decode(context));
+    array.push(decodeAny(context, options));
   }
   return array;
-}
+};
 
-export function decodeArrayOfLength(
+export const decodeArrayOfLength = (
   context: DecodeContext,
+  options: Options,
   length: number
-): any[] {
+): any[] => {
   const array = new Array(length);
   for (let i = 0; i < length; i++) {
-    array[i] = decode(context);
+    array[i] = decodeAny(context, options);
   }
   return array;
-}
+};

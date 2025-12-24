@@ -1,4 +1,4 @@
-import { encode, decode } from ".";
+import { encodeAny, decodeAny } from "./any";
 import {
   CLASS_OFFSET,
   OBJECT_MAX,
@@ -6,26 +6,64 @@ import {
   ZOBJECT_TAG,
   SENTINEL,
   CLASS_MAX,
-} from "./constants";
-import type { DecodeContext, EncodeContext } from "./context";
+} from "./layout";
+import type {
+  DecodeContext,
+  EncodeContext,
+  Options,
+  RecordOrMap,
+} from "./common";
 import { decodeCString, encodeCString } from "./string";
 
-export function encodeObject(context: EncodeContext, obj: Record<string, any>) {
-  const keys = Object.keys(obj);
+export const createObject = (options: Options): RecordOrMap => {
+  return options.useMap ? new Map<string, any>() : {};
+};
+
+export const getKeys = (value: RecordOrMap): string[] => {
+  return value instanceof Map ? Array.from(value.keys()) : Object.keys(value);
+};
+
+export const getValue = (value: RecordOrMap, key: string): any => {
+  return value instanceof Map ? value.get(key) : value[key];
+};
+
+export const setValue = (object: RecordOrMap, key: string, value: any) => {
+  if (object instanceof Map) {
+    object.set(key, value);
+  } else {
+    if (key === "__proto__") {
+      Object.defineProperty(object, key, {
+        value,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+    } else {
+      object[key] = value;
+    }
+  }
+};
+
+export const encodeObject = (
+  context: EncodeContext,
+  options: Options,
+  value: RecordOrMap
+) => {
+  const keys = getKeys(value);
 
   const classString = keys.join("\0");
 
-  if (context.classMap[classString] !== undefined) {
-    const classIndex = context.classMap[classString];
+  const classIndex = context.classMap.get(classString);
+  if (classIndex !== undefined) {
     context.buffer[context.offset++] = CLASS_OFFSET + classIndex;
     for (const key of keys) {
-      encode(context, obj[key]);
+      encodeAny(context, options, getValue(value, key));
     }
     return;
   }
 
   if (context.classCount <= CLASS_MAX) {
-    context.classMap[classString] = context.classCount++;
+    context.classMap.set(classString, context.classCount++);
   }
 
   const length = keys.length;
@@ -44,23 +82,27 @@ export function encodeObject(context: EncodeContext, obj: Record<string, any>) {
   }
 
   for (const key of keys) {
-    encode(context, obj[key]);
+    encodeAny(context, options, getValue(value, key));
   }
-}
+};
 
-export function decodeClass(
+export const decodeClass = (
   context: DecodeContext,
+  options: Options,
   index: number
-): Record<string, any> {
+): RecordOrMap => {
   const classKeys = context.classList[index];
-  const output: Record<string, any> = {};
+  const output = createObject(options);
   for (const key of classKeys) {
-    output[key] = decode(context);
+    setValue(output, key, decodeAny(context, options));
   }
   return output;
-}
+};
 
-export function decodeZObject(context: DecodeContext): Record<string, any> {
+export const decodeZObject = (
+  context: DecodeContext,
+  options: Options
+) => {
   const keys: string[] = [];
   while (true) {
     if (context.buffer[context.offset] === SENTINEL) {
@@ -71,28 +113,29 @@ export function decodeZObject(context: DecodeContext): Record<string, any> {
   }
   context.classList.push(keys);
 
-  const output: Record<string, any> = {};
+  const output = createObject(options);
 
   for (const key of keys) {
-    output[key] = decode(context);
+    setValue(output, key, decodeAny(context, options));
   }
 
   return output;
-}
+};
 
-export function decodeObjectWithLength(
+export const decodeObjectWithLength = (
   context: DecodeContext,
+  options: Options,
   length: number
-): Record<string, any> {
+): RecordOrMap => {
   const keys = new Array<string>(length);
   for (let i = 0; i < length; i++) {
     keys[i] = decodeCString(context);
   }
   context.classList.push(keys);
-  const output: Record<string, any> = {};
+  const output = createObject(options);
 
   for (const key of keys) {
-    output[key] = decode(context);
+    setValue(output, key, decodeAny(context, options));
   }
   return output;
-}
+};

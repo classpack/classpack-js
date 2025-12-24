@@ -13,10 +13,10 @@ export const BUF8_TAG = 9;
 export const BUF16_TAG = 10;
 export const BUF32_TAG = 11;
 
-export const EXT0_TAG = 12;
-export const EXT1_TAG = 13;
-export const EXT2_TAG = 14;
-export const EXT3_TAG = 15;
+export const DATE_TAG = 12;
+export const BIGINT_TAG = 13;
+export const DECIMAL_TAG = 14;
+export const EXT_TAG = 15;
 
 export const OBJECT_OFFSET = 16;
 export const OBJECT_MAX = 15;

@@ -16,7 +16,7 @@ import type {
 import { decodeCString, encodeCString } from "./string";
 
 export const createObject = (options: Options): RecordOrMap => {
-  return options.useMap ? new Map<string, any>() : {};
+  return options.preferMap ? new Map<string, any>() : {};
 };
 
 export const getKeys = (value: RecordOrMap): string[] => {

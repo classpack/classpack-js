@@ -23,8 +23,9 @@ export type Extension<T> = {
 export type RecordOrMap = Record<string, any> | Map<string, any>;
 
 export type Options = {
-  useMap: boolean;
-  useFloat32: boolean;
+  preferMap: boolean;
+  preferFloat32: boolean;
+  preferNull: boolean;
   extsByType: Map<number, Extension<any>>;
   extsByTarget: Map<Class<any>, Extension<any>>;
 };

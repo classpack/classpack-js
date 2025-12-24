@@ -27,3 +27,4 @@ export const STRING_MAX = 31;
 export const ARRAY_OFFSET = 80;
 export const ARRAY_MAX = 15;
 export const SINT_OFFSET = 96;
+export const SINT_OFFSET_BIGINT = BigInt(SINT_OFFSET);

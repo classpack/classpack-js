@@ -24,19 +24,20 @@ export class Classpack {
       classList: [],
     };
     this.options = {
-      useMap: false,
-      useFloat32: false,
+      preferMap: false,
+      preferNull: false,
+      preferFloat32: false,
       extsByType: new Map(),
       extsByTarget: new Map(),
     };
   }
 
   public useMap(value = true): void {
-    this.options.useMap = value;
+    this.options.preferMap = value;
   }
 
   public useFloat32(value = true): void {
-    this.options.useFloat32 = value;
+    this.options.preferFloat32 = value;
   }
 
   public register(extension: Extension<any>): void {

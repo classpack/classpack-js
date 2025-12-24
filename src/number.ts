@@ -1,20 +1,41 @@
-import { F32_TAG, F64_TAG, SINT_OFFSET } from "./layout";
+import { F32_TAG, F64_TAG, SINT_OFFSET, SINT_OFFSET_BIGINT } from "./layout";
 import { ensureCapacity } from "./common";
 import type { DecodeContext, EncodeContext, Options } from "./common";
 
-export const decodeVint = (context: DecodeContext): number => {
+export const decodeInt = (context: DecodeContext): number | bigint => {
   let value = 0;
+  let multiplier = 1;
   let shift = 0;
   while (true) {
     const byte = context.buffer[context.offset++];
-    value |= (byte & 0x7f) << shift;
+    const next = value + (byte & 0x7f) * multiplier;
+    if (next > Number.MAX_SAFE_INTEGER) {
+      context.offset--;
+      return decodeBigInt(context, BigInt(value), BigInt(shift));
+    }
+    value = next;
     if ((byte & 0x80) === 0) break;
+    multiplier *= 0x80;
     shift += 7;
   }
   return value;
 };
 
-export const encodeVint = (context: EncodeContext, value: number) => {
+export const decodeBigInt = (
+  context: DecodeContext,
+  value = 0n,
+  shift = 0n
+): bigint => {
+  while (true) {
+    const byte = context.buffer[context.offset++];
+    value += BigInt(byte & 0x7f) << shift;
+    if ((byte & 0x80) === 0) break;
+    shift += 7n;
+  }
+  return value;
+};
+
+export const encodeInt = (context: EncodeContext, value: number) => {
   do {
     let byte = value & 0x7f;
     value >>= 7;
@@ -26,6 +47,21 @@ export const encodeVint = (context: EncodeContext, value: number) => {
   } while (value !== 0);
 };
 
+export const encodeBigInt = (context: EncodeContext, value: bigint) => {
+  const isNegative = value < 0n;
+  let intValue = isNegative ? -value : value;
+  intValue = (intValue << 1n) + (isNegative ? 1n : 0n) + SINT_OFFSET_BIGINT;
+  do {
+    let byte = Number(intValue & 0x7fn);
+    intValue >>= 7n;
+    if (intValue !== 0n) {
+      byte |= 0x80;
+    }
+    ensureCapacity(context, 1);
+    context.buffer[context.offset++] = byte;
+  } while (intValue !== 0n);
+};
+
 export const encodeNumber = (
   context: EncodeContext,
   options: Options,
@@ -33,18 +69,23 @@ export const encodeNumber = (
 ) => {
   if (Number.isInteger(value)) {
     const isNegative = value < 0;
-    const intValue = (Math.abs(value) << 1) + +isNegative;
-    encodeVint(context, intValue + SINT_OFFSET);
+    const abs = isNegative ? -value : value;
+    const shifted = abs * 2;
+    if (shifted > Number.MAX_SAFE_INTEGER) {
+      encodeBigInt(context, BigInt(value));
+      return;
+    }
+    encodeInt(context, shifted + SINT_OFFSET + +isNegative);
   } else {
-    if (options.useFloat32) {
-      encodeF32(context, value);
+    if (options.preferFloat32) {
+      encodeFloat32(context, value);
     } else {
-      encodeF64(context, value);
+      encodeFloat64(context, value);
     }
   }
 };
 
-export const encodeF64 = (context: EncodeContext, value: number) => {
+export const encodeFloat64 = (context: EncodeContext, value: number) => {
   ensureCapacity(context, 9);
   context.buffer[context.offset++] = F64_TAG;
   const view = new DataView(
@@ -56,7 +97,7 @@ export const encodeF64 = (context: EncodeContext, value: number) => {
   context.offset += 8;
 };
 
-export const encodeF32 = (context: EncodeContext, value: number) => {
+export const encodeFloat32 = (context: EncodeContext, value: number) => {
   ensureCapacity(context, 5);
   context.buffer[context.offset++] = F32_TAG;
   const view = new DataView(
@@ -68,7 +109,7 @@ export const encodeF32 = (context: EncodeContext, value: number) => {
   context.offset += 4;
 };
 
-export const decodeF32 = (context: DecodeContext): number => {
+export const decodeFloat32 = (context: DecodeContext): number => {
   const view = new DataView(
     context.buffer.buffer,
     context.buffer.byteOffset + context.offset,
@@ -79,7 +120,7 @@ export const decodeF32 = (context: DecodeContext): number => {
   return value;
 };
 
-export const decodeF64 = (context: DecodeContext): number => {
+export const decodeFloat64 = (context: DecodeContext): number => {
   const view = new DataView(
     context.buffer.buffer,
     context.buffer.byteOffset + context.offset,

@@ -14,13 +14,16 @@ import {
   OBJECT_OFFSET,
   STRING_OFFSET,
   ARRAY_OFFSET,
+  SINT_OFFSET_BIGINT,
 } from "./layout";
-import type {
-  EncodeContext,
-  DecodeContext,
-  Options,
-} from "./common";
-import { encodeNumber, decodeVint, decodeF32, decodeF64 } from "./number";
+import type { EncodeContext, DecodeContext, Options } from "./common";
+import {
+  encodeNumber,
+  decodeInt,
+  decodeFloat32,
+  decodeFloat64,
+  encodeBigInt,
+} from "./number";
 import {
   encodeObject,
   decodeClass,
@@ -38,11 +41,17 @@ export const encodeAny = (
     case "boolean":
       context.buffer[context.offset++] = value ? TRUE_CONST : FALSE_CONST;
       break;
+    case "string":
+      encodeString(context, value);
+      break;
     case "number":
       encodeNumber(context, options, value);
       break;
-    case "string":
-      encodeString(context, value);
+    case "bigint":
+      encodeBigInt(context, value);
+      break;
+    case "undefined":
+      context.buffer[context.offset++] = NULL_CONST;
       break;
     case "object":
       if (value === null) {
@@ -58,14 +67,18 @@ export const encodeAny = (
   }
 };
 
-export const decodeAny = (
-  context: DecodeContext,
-  options: Options
-): any => {
+export const decodeAny = (context: DecodeContext, options: Options): any => {
   const tag = context.buffer[context.offset];
 
   if (tag >= SINT_OFFSET) {
-    const value = decodeVint(context) - SINT_OFFSET;
+    const raw = decodeInt(context);
+    if (typeof raw === "bigint") {
+      const value = raw - SINT_OFFSET_BIGINT;
+      const isNegative = value & 1n;
+      const intValue = value >> 1n;
+      return isNegative ? -intValue : intValue;
+    }
+    const value = raw - SINT_OFFSET;
     const isNegative = value & 1;
     const intValue = value >> 1;
     return isNegative ? -intValue : intValue;
@@ -77,15 +90,15 @@ export const decodeAny = (
     case SENTINEL:
       throw new Error("Unexpected sentinel at " + (context.offset - 1));
     case NULL_CONST:
-      return null;
+      return options.preferNull ? null : undefined;
     case TRUE_CONST:
       return true;
     case FALSE_CONST:
       return false;
     case F32_TAG:
-      return decodeF32(context);
+      return decodeFloat32(context);
     case F64_TAG:
-      return decodeF64(context);
+      return decodeFloat64(context);
     case ZSTRING_TAG:
       return decodeCString(context);
     case ZARRAY_TAG:

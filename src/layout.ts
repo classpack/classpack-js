@@ -1,17 +1,17 @@
-export const SENTINEL = 0;
+export const ZERO = 0;
 export const NULL_CONST = 1;
 export const TRUE_CONST = 2;
 export const FALSE_CONST = 3;
 
-export const F32_TAG = 4;
-export const F64_TAG = 5;
+export const FLOAT32_TAG = 4;
+export const FLOAT64_TAG = 5;
 export const ZSTRING_TAG = 6;
 export const ZARRAY_TAG = 7;
 
 export const ZOBJECT_TAG = 8;
-export const BUF8_TAG = 9;
-export const BUF16_TAG = 10;
-export const BUF32_TAG = 11;
+export const BYTES_TAG = 9;
+export const REGEX_TAG = 10;
+export const REF_TAG = 11;
 
 export const DATE_TAG = 12;
 export const BIGINT_TAG = 13;
@@ -27,4 +27,3 @@ export const STRING_MAX = 31;
 export const ARRAY_OFFSET = 80;
 export const ARRAY_MAX = 15;
 export const SINT_OFFSET = 96;
-export const SINT_OFFSET_BIGINT = BigInt(SINT_OFFSET);

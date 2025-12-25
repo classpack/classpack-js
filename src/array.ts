@@ -1,53 +1,62 @@
-import { decodeAny, encodeAny } from "./any";
-import { ARRAY_MAX, ARRAY_OFFSET, ZARRAY_TAG, SENTINEL } from "./layout";
-import type { EncodeContext, DecodeContext, Options } from "./common";
+import { readAny, writeAny } from "./any";
+import type { Options, ReadState, WriteState } from "./common";
 import { ensureCapacity } from "./common";
+import { ARRAY_MAX, ARRAY_OFFSET, ZARRAY_TAG, ZERO } from "./layout";
+import { registerRef, tryWriteRef } from "./ref";
 
-export const encodeArray = (
-  context: EncodeContext,
+export const writeArray = (
+  context: WriteState,
   options: Options,
   values: any[]
 ) => {
+  if (tryWriteRef(context, options, values)) {
+    return;
+  }
+
   if (values.length <= ARRAY_MAX) {
     ensureCapacity(context, 1);
-    context.buffer[context.offset++] = ARRAY_OFFSET + values.length;
+    context.bytes[context.index++] = ARRAY_OFFSET + values.length;
     for (const value of values) {
-      encodeAny(context, options, value);
+      writeAny(context, options, value);
     }
 
     return;
   }
+  
   ensureCapacity(context, 1);
-  context.buffer[context.offset++] = ZARRAY_TAG;
+  context.bytes[context.index++] = ZARRAY_TAG;
   for (const value of values) {
-    encodeAny(context, options, value);
+    writeAny(context, options, value);
   }
-  context.buffer[context.offset++] = SENTINEL;
+  context.bytes[context.index++] = ZERO;
 };
 
-export const decodeZArray = (
-  context: DecodeContext,
-  options: Options
-): any[] => {
-  const array = [];
+export const readZArray = (context: ReadState, options: Options): any[] => {
+  const array: any[] = [];
+
+  registerRef(context, options, array);
+
   while (true) {
-    if (context.buffer[context.offset] === SENTINEL) {
-      context.offset++;
+    if (context.bytes[context.index] === ZERO) {
+      context.index++;
       break;
     }
-    array.push(decodeAny(context, options));
+    array.push(readAny(context, options));
   }
   return array;
 };
 
-export const decodeArrayOfLength = (
-  context: DecodeContext,
+export const readArrayOfLength = (
+  context: ReadState,
   options: Options,
   length: number
 ): any[] => {
   const array = new Array(length);
+
+  registerRef(context, options, array);
+
   for (let i = 0; i < length; i++) {
-    array[i] = decodeAny(context, options);
+    array[i] = readAny(context, options);
   }
   return array;
 };

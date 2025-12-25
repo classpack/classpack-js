@@ -21,22 +21,3 @@ for await (const file of glob.scan(".")) {
   });
 }
 
-describe("bigint encoding/decoding", () => {
-  const classpack = new Classpack();
-
-  const bigints = [
-    123456789012345678901234567890n,
-    -123456789012345678901234567890n,
-    2n ** 100n,
-    -(2n ** 100n),
-  ];
-
-  for (const bigIntValue of bigints) {
-    it(`encodes and decodes bigint: ${bigIntValue.toString()}`, () => {
-      const encoded = classpack.encode(bigIntValue);
-      console.log("Encoded bigint bytes:", encoded);
-      const decoded = classpack.decode(encoded);
-      expect(decoded).toBe(bigIntValue);
-    });
-  }
-});

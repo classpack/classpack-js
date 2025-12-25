@@ -1,0 +1,42 @@
+import { Classpack } from "../src";
+import { describe, it, expect } from "bun:test";
+
+describe("Graph encoding/decoding", () => {
+  const classpack = new Classpack();
+
+  it(`encodes and decodes cyclic object graph`, () => {
+    type Vertex = {
+      id: number;
+      neighbors: Vertex[];
+    };
+
+    const vertices: Vertex[] = [];
+
+    for (let i = 0; i < 5; i++) {
+      vertices.push({ id: i, neighbors: [] });
+    }
+
+    // make a complete graph
+    for (let i = 0; i < vertices.length; i++) {
+      for (let j = i + 1; j < vertices.length; j++) {
+        vertices[i].neighbors.push(vertices[j]);
+        vertices[j].neighbors.push(vertices[i]);
+      }
+    }
+
+    const encoded = classpack.encode(vertices);
+    const decoded = classpack.decode(encoded);
+
+    expect(decoded).toEqual(vertices);
+  });
+
+  it(`encodes and decodes self-referential array`, () => {
+    const arr: any[] = [];
+    arr.push(arr);
+
+    const encoded = classpack.encode(arr);
+    const decoded = classpack.decode(encoded);
+
+    expect(decoded).toEqual(arr);
+  });
+});

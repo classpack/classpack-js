@@ -1,50 +1,50 @@
-import { STRING_MAX, STRING_OFFSET, ZSTRING_TAG, SENTINEL } from "./layout";
-import type { DecodeContext, EncodeContext } from "./common";
+import { STRING_MAX, STRING_OFFSET, ZSTRING_TAG, ZERO } from "./layout";
+import type { ReadState, WriteState } from "./common";
 import { ensureCapacity } from "./common";
 
-export const decodeCString = (context: DecodeContext): string => {
-  const start = context.offset;
-  while (context.buffer[context.offset] !== 0) {
-    context.offset++;
+export const decodeCString = (context: ReadState): string => {
+  const start = context.index;
+  while (context.bytes[context.index] !== 0) {
+    context.index++;
   }
-  const keyBytes = context.buffer.slice(start, context.offset);
-  context.offset++;
+  const keyBytes = context.bytes.slice(start, context.index);
+  context.index++;
   return new TextDecoder().decode(keyBytes);
 };
 
-export const encodeCString = (context: EncodeContext, value: string) => {
+export const encodeCString = (context: WriteState, value: string) => {
   const strBytes = new TextEncoder().encode(value);
   ensureCapacity(context, strBytes.length + 1);
-  context.buffer.set(strBytes, context.offset);
-  context.offset += strBytes.length;
-  context.buffer[context.offset++] = 0;
+  context.bytes.set(strBytes, context.index);
+  context.index += strBytes.length;
+  context.bytes[context.index++] = 0;
 };
 
 export const decodeStringOfLength = (
-  context: DecodeContext,
+  context: ReadState,
   length: number
 ): string => {
-  const strBytes = context.buffer.slice(
-    context.offset,
-    context.offset + length
+  const strBytes = context.bytes.slice(
+    context.index,
+    context.index + length
   );
-  context.offset += length;
+  context.index += length;
   return new TextDecoder().decode(strBytes);
 };
 
-export const encodeString = (context: EncodeContext, value: string) => {
+export const encodeString = (context: WriteState, value: string) => {
   const strBytes = new TextEncoder().encode(value);
 
   if (strBytes.length <= STRING_MAX) {
     ensureCapacity(context, strBytes.length + 1);
-    context.buffer[context.offset++] = STRING_OFFSET + strBytes.length;
-    context.buffer.set(strBytes, context.offset);
-    context.offset += strBytes.length;
+    context.bytes[context.index++] = STRING_OFFSET + strBytes.length;
+    context.bytes.set(strBytes, context.index);
+    context.index += strBytes.length;
   } else {
     ensureCapacity(context, strBytes.length + 2);
-    context.buffer[context.offset++] = ZSTRING_TAG;
-    context.buffer.set(strBytes, context.offset);
-    context.offset += strBytes.length;
-    context.buffer[context.offset++] = SENTINEL;
+    context.bytes[context.index++] = ZSTRING_TAG;
+    context.bytes.set(strBytes, context.index);
+    context.index += strBytes.length;
+    context.bytes[context.index++] = ZERO;
   }
 };

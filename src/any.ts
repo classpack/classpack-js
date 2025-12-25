@@ -1,12 +1,12 @@
-import { decodeArrayOfLength, decodeZArray, encodeArray } from "./array";
+import { readArrayOfLength, readZArray, writeArray } from "./array";
 import {
   TRUE_CONST,
   FALSE_CONST,
   NULL_CONST,
   SINT_OFFSET,
-  SENTINEL,
-  F32_TAG,
-  F64_TAG,
+  ZERO,
+  FLOAT32_TAG,
+  FLOAT64_TAG,
   ZSTRING_TAG,
   ZARRAY_TAG,
   ZOBJECT_TAG,
@@ -14,52 +14,53 @@ import {
   OBJECT_OFFSET,
   STRING_OFFSET,
   ARRAY_OFFSET,
-  SINT_OFFSET_BIGINT,
+  DATE_TAG,
+  BYTES_TAG,
+  REF_TAG,
 } from "./layout";
-import type { EncodeContext, DecodeContext, Options } from "./common";
 import {
-  encodeNumber,
-  decodeInt,
-  decodeFloat32,
-  decodeFloat64,
-  encodeBigInt,
-} from "./number";
+  type WriteState,
+  type ReadState,
+  type Options,
+  unzigzag,
+} from "./common";
+import { writeNumber, readVarint, readFloat32, readFloat64 } from "./number";
 import {
-  encodeObject,
-  decodeClass,
-  decodeZObject,
-  decodeObjectWithLength,
+  writeObject,
+  readClass,
+  readZObject,
+  readObjectWithLength,
 } from "./object";
 import { encodeString, decodeCString, decodeStringOfLength } from "./string";
+import { readDate, writeDate } from "./date";
+import { readBytes, writeBytes } from "./bytes";
+import { readRef } from "./ref";
 
-export const encodeAny = (
-  context: EncodeContext,
-  options: Options,
-  value: any
-) => {
+export const writeAny = (context: WriteState, options: Options, value: any) => {
   switch (typeof value) {
     case "boolean":
-      context.buffer[context.offset++] = value ? TRUE_CONST : FALSE_CONST;
+      context.bytes[context.index++] = value ? TRUE_CONST : FALSE_CONST;
       break;
     case "string":
       encodeString(context, value);
       break;
     case "number":
-      encodeNumber(context, options, value);
-      break;
-    case "bigint":
-      encodeBigInt(context, value);
+      writeNumber(context, options, value);
       break;
     case "undefined":
-      context.buffer[context.offset++] = NULL_CONST;
+      context.bytes[context.index++] = NULL_CONST;
       break;
     case "object":
       if (value === null) {
-        context.buffer[context.offset++] = NULL_CONST;
+        context.bytes[context.index++] = NULL_CONST;
       } else if (Array.isArray(value)) {
-        encodeArray(context, options, value);
+        writeArray(context, options, value);
+      } else if (value instanceof Date) {
+        writeDate(context, value);
+      } else if (value instanceof Uint8Array) {
+        writeBytes(context, value);
       } else {
-        encodeObject(context, options, value);
+        writeObject(context, options, value);
       }
       break;
     default:
@@ -67,54 +68,49 @@ export const encodeAny = (
   }
 };
 
-export const decodeAny = (context: DecodeContext, options: Options): any => {
-  const tag = context.buffer[context.offset];
+export const readAny = (context: ReadState, options: Options): any => {
+  const tag = context.bytes[context.index];
 
   if (tag >= SINT_OFFSET) {
-    const raw = decodeInt(context);
-    if (typeof raw === "bigint") {
-      const value = raw - SINT_OFFSET_BIGINT;
-      const isNegative = value & 1n;
-      const intValue = value >> 1n;
-      return isNegative ? -intValue : intValue;
-    }
-    const value = raw - SINT_OFFSET;
-    const isNegative = value & 1;
-    const intValue = value >> 1;
-    return isNegative ? -intValue : intValue;
+    return unzigzag(readVarint(context) - SINT_OFFSET);
   }
 
-  context.offset++;
+  context.index++;
 
   switch (tag) {
-    case SENTINEL:
-      throw new Error("Unexpected sentinel at " + (context.offset - 1));
+    case ZERO:
+      throw new Error("Unexpected sentinel at " + (context.index - 1));
     case NULL_CONST:
       return options.preferNull ? null : undefined;
     case TRUE_CONST:
       return true;
     case FALSE_CONST:
       return false;
-    case F32_TAG:
-      return decodeFloat32(context);
-    case F64_TAG:
-      return decodeFloat64(context);
+    case FLOAT32_TAG:
+      return readFloat32(context);
+    case FLOAT64_TAG:
+      return readFloat64(context);
     case ZSTRING_TAG:
       return decodeCString(context);
     case ZARRAY_TAG:
-      return decodeZArray(context, options);
-    case ZOBJECT_TAG: {
-      return decodeZObject(context, options);
-    }
+      return readZArray(context, options);
+    case ZOBJECT_TAG:
+      return readZObject(context, options);
+    case REF_TAG:
+      return readRef(context, options);
+    case BYTES_TAG:
+      return readBytes(context);
+    case DATE_TAG:
+      return readDate(context);
   }
 
   if (tag < CLASS_OFFSET) {
-    return decodeObjectWithLength(context, options, tag - OBJECT_OFFSET);
+    return readObjectWithLength(context, options, tag - OBJECT_OFFSET);
   } else if (tag < STRING_OFFSET) {
-    return decodeClass(context, options, tag - CLASS_OFFSET);
+    return readClass(context, options, tag - CLASS_OFFSET);
   } else if (tag < ARRAY_OFFSET) {
     return decodeStringOfLength(context, tag - STRING_OFFSET);
   } else if (tag < SINT_OFFSET) {
-    return decodeArrayOfLength(context, options, tag - ARRAY_OFFSET);
+    return readArrayOfLength(context, options, tag - ARRAY_OFFSET);
   }
 };

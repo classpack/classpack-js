@@ -1,132 +1,111 @@
-import { F32_TAG, F64_TAG, SINT_OFFSET, SINT_OFFSET_BIGINT } from "./layout";
-import { ensureCapacity } from "./common";
-import type { DecodeContext, EncodeContext, Options } from "./common";
+import { FLOAT32_TAG, FLOAT64_TAG, SINT_OFFSET } from "./layout";
+import { ensureCapacity, zigzag } from "./common";
+import type { ReadState, WriteState, Options } from "./common";
 
-export const decodeInt = (context: DecodeContext): number | bigint => {
+export const readVarint = (context: ReadState): number => {
   let value = 0;
   let multiplier = 1;
-  let shift = 0;
   while (true) {
-    const byte = context.buffer[context.offset++];
-    const next = value + (byte & 0x7f) * multiplier;
-    if (next > Number.MAX_SAFE_INTEGER) {
-      context.offset--;
-      return decodeBigInt(context, BigInt(value), BigInt(shift));
-    }
-    value = next;
+    const byte = context.bytes[context.index++];
+    value += (byte & 0x7f) * multiplier;
     if ((byte & 0x80) === 0) break;
     multiplier *= 0x80;
-    shift += 7;
   }
   return value;
 };
 
-export const decodeBigInt = (
-  context: DecodeContext,
-  value = 0n,
-  shift = 0n
-): bigint => {
-  while (true) {
-    const byte = context.buffer[context.offset++];
-    value += BigInt(byte & 0x7f) << shift;
-    if ((byte & 0x80) === 0) break;
-    shift += 7n;
-  }
-  return value;
-};
-
-export const encodeInt = (context: EncodeContext, value: number) => {
+export const writeVarint = (context: WriteState, value: number) => {
   do {
     let byte = value & 0x7f;
-    value >>= 7;
+    value = Math.floor(value / 0x80);
     if (value !== 0) {
       byte |= 0x80;
     }
     ensureCapacity(context, 1);
-    context.buffer[context.offset++] = byte;
+    context.bytes[context.index++] = byte;
   } while (value !== 0);
 };
 
-export const encodeBigInt = (context: EncodeContext, value: bigint) => {
-  const isNegative = value < 0n;
-  let intValue = isNegative ? -value : value;
-  intValue = (intValue << 1n) + (isNegative ? 1n : 0n) + SINT_OFFSET_BIGINT;
-  do {
-    let byte = Number(intValue & 0x7fn);
-    intValue >>= 7n;
-    if (intValue !== 0n) {
-      byte |= 0x80;
-    }
-    ensureCapacity(context, 1);
-    context.buffer[context.offset++] = byte;
-  } while (intValue !== 0n);
-};
+const MAX_INT = 2 ** 52 - 49;
 
-export const encodeNumber = (
-  context: EncodeContext,
+/**
+ * Encode a number either as a float or as a zigzag variable-length integer.
+ * @param context
+ * @param options
+ * @param value
+ *
+ * When x >= 0:
+ * 2x + 96 <= 2^53 - 1
+ * 2x <= 2^53 - 97
+ * x <= 2^52 - 49 (rounded up)
+ *
+ * When x < 0:
+ * -2x + 96 + 1 <= 2^53 - 1
+ * -2x + 97 <= 2^53 - 1
+ * -2x <= 2^53 - 98
+ * -x <= 2^52 - 49
+ * x >= -(2^52 - 49)
+ *
+ * Empirically, the range is larger, but this is a safe bound.
+ */
+export const writeNumber = (
+  context: WriteState,
   options: Options,
   value: number
 ) => {
-  if (Number.isInteger(value)) {
-    const isNegative = value < 0;
-    const abs = isNegative ? -value : value;
-    const shifted = abs * 2;
-    if (shifted > Number.MAX_SAFE_INTEGER) {
-      encodeBigInt(context, BigInt(value));
-      return;
-    }
-    encodeInt(context, shifted + SINT_OFFSET + +isNegative);
+  if (Number.isInteger(value) && value >= -MAX_INT && value <= MAX_INT) {
+    writeVarint(context, zigzag(value) + SINT_OFFSET);
   } else {
     if (options.preferFloat32) {
-      encodeFloat32(context, value);
+      writeFloat32(context, value);
     } else {
-      encodeFloat64(context, value);
+      writeFloat64(context, value);
     }
   }
 };
 
-export const encodeFloat64 = (context: EncodeContext, value: number) => {
+export const writeFloat64 = (context: WriteState, value: number) => {
   ensureCapacity(context, 9);
-  context.buffer[context.offset++] = F64_TAG;
+  context.bytes[context.index++] = FLOAT64_TAG;
   const view = new DataView(
-    context.buffer.buffer,
-    context.buffer.byteOffset + context.offset,
+    context.bytes.buffer,
+    context.bytes.byteOffset + context.index,
     8
   );
   view.setFloat64(0, value, true);
-  context.offset += 8;
+  context.index += 8;
 };
 
-export const encodeFloat32 = (context: EncodeContext, value: number) => {
+export const writeFloat32 = (context: WriteState, value: number) => {
   ensureCapacity(context, 5);
-  context.buffer[context.offset++] = F32_TAG;
+  context.bytes[context.index++] = FLOAT32_TAG;
   const view = new DataView(
-    context.buffer.buffer,
-    context.buffer.byteOffset + context.offset,
+    context.bytes.buffer,
+    context.bytes.byteOffset + context.index,
     4
   );
   view.setFloat32(0, value, true);
-  context.offset += 4;
+  context.index += 4;
 };
 
-export const decodeFloat32 = (context: DecodeContext): number => {
+export const readFloat32 = (context: ReadState): number => {
   const view = new DataView(
-    context.buffer.buffer,
-    context.buffer.byteOffset + context.offset,
+    context.bytes.buffer,
+    context.bytes.byteOffset + context.index,
     4
   );
   const value = view.getFloat32(0, true);
-  context.offset += 4;
+  context.index += 4;
   return value;
 };
 
-export const decodeFloat64 = (context: DecodeContext): number => {
+export const readFloat64 = (context: ReadState): number => {
   const view = new DataView(
-    context.buffer.buffer,
-    context.buffer.byteOffset + context.offset,
+    context.bytes.buffer,
+    context.bytes.byteOffset + context.index,
     8
   );
   const value = view.getFloat64(0, true);
-  context.offset += 8;
+  context.index += 8;
   return value;
 };

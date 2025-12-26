@@ -1,8 +1,8 @@
-import { Classpack } from "../src";
+import { ClassPack, UINT8ARRAY_EXT } from "../src";
 import { describe, it, expect } from "bun:test";
 
 describe("Bytes encoding/decoding", () => {
-  const classpack = new Classpack();
+  const classpack = new ClassPack({ exts: [UINT8ARRAY_EXT] });
 
   const byteArrays = [
     new Uint8Array([]),
@@ -14,8 +14,8 @@ describe("Bytes encoding/decoding", () => {
 
   for (const byteArray of byteArrays) {
     it(`encodes and decodes byte array of length: ${byteArray.length}`, () => {
-      const encoded = classpack.encode(byteArray);
-      const decoded = classpack.decode(encoded);
+      const encoded = classpack.pack(byteArray);
+      const decoded = classpack.unpack(encoded);
       expect(decoded instanceof Uint8Array).toBe(true);
       expect(decoded).toEqual(byteArray);
     });

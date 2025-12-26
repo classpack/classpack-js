@@ -8,36 +8,36 @@ import { REF_TAG } from "./layout";
 import { writeVarint, readVarint } from "./number";
 
 export const tryWriteRef = (
-  context: WriteState,
+  state: WriteState,
   options: Options,
   value: any
 ): boolean => {
   if (options.noRefs) return false;
-  const refIndex = context.refs.get(value);
+  const refIndex = state.refs.get(value);
   if (refIndex !== undefined) {
-    ensureCapacity(context, 1);
-    context.bytes[context.index++] = REF_TAG;
-    writeVarint(context, refIndex);
+    ensureCapacity(state, 1);
+    state.data[state.index++] = REF_TAG;
+    writeVarint(state, refIndex);
     return true;
   }
-  context.refs.set(value, context.refs.size);
+  state.refs.set(value, state.refs.size);
   return false;
 };
 
-export const readRef = (context: ReadState, options: Options): any => {
+export const readRef = (state: ReadState, options: Options): any => {
   if (options.noRefs) {
     throw new Error("References are disabled in options");
   }
-  const refIndex = readVarint(context);
-  return context.refs[refIndex];
+  const refIndex = readVarint(state);
+  return state.refs[refIndex];
 };
 
 export const registerRef = (
-  context: ReadState,
+  state: ReadState,
   options: Options,
   value: any
 ) => {
   if (!options.noRefs) {
-    context.refs.push(value);
+    state.refs.push(value);
   }
 };

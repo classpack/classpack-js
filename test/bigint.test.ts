@@ -4,11 +4,10 @@ import { describe, it, expect } from "bun:test";
 describe("ints encoding/decoding", () => {
   const classpack = new ClassPack();
 
-  const MAX_INT = 2 ** 52 - 49;
-  const ints = [MAX_INT, -MAX_INT];
+  const ints = [123n, -1234n, 2n ** 1023n, -(2n ** 1023n)];
 
   for (const int of ints) {
-    it(`encodes and decodes int: ${int.toString()}`, () => {
+    it(`encodes and decodes bigint: ${int.toString()}`, () => {
       const encoded = classpack.pack(int);
       const decoded = classpack.unpack(encoded);
       expect(decoded).toBe(int);

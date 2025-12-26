@@ -6,7 +6,6 @@ import {
   ZOBJECT_TAG,
   ZERO,
   CLASS_MAX,
-  REF_TAG,
 } from "./layout";
 import {
   type ReadState,
@@ -34,7 +33,16 @@ export const getValue = (value: RecordOrMap, key: string): any => {
   return value instanceof Map ? value.get(key) : value[key];
 };
 
-export const setValue = (object: RecordOrMap, key: string, value: any) => {
+export const setValue = (
+  options: Options,
+  object: RecordOrMap,
+  key: string,
+  value: any
+) => {
+  if (!options.keepUndefined && value === undefined) {
+    return;
+  }
+
   if (object instanceof Map) {
     object.set(key, value);
   } else {
@@ -52,11 +60,11 @@ export const setValue = (object: RecordOrMap, key: string, value: any) => {
 };
 
 export const writeObject = (
-  context: WriteState,
+  state: WriteState,
   options: Options,
   value: RecordOrMap
 ) => {
-  if (tryWriteRef(context, options, value)) {
+  if (tryWriteRef(state, options, value)) {
     return;
   }
 
@@ -64,85 +72,85 @@ export const writeObject = (
 
   const classString = keys.join("\0");
 
-  const classIndex = context.classes.get(classString);
+  const classIndex = state.classes.get(classString);
   if (classIndex !== undefined) {
-    context.bytes[context.index++] = CLASS_OFFSET + classIndex;
+    state.data[state.index++] = CLASS_OFFSET + classIndex;
     for (const key of keys) {
-      writeAny(context, options, getValue(value, key));
+      writeAny(state, options, getValue(value, key));
     }
     return;
   }
 
-  if (context.classes.size <= CLASS_MAX) {
-    context.classes.set(classString, context.classes.size);
+  if (state.classes.size <= CLASS_MAX) {
+    state.classes.set(classString, state.classes.size);
   }
 
   const length = keys.length;
 
-  const tagOffset = context.index++;
+  const tagOffset = state.index++;
 
   for (const key of keys) {
-    encodeCString(context, key);
+    encodeCString(state, key);
   }
 
   if (length <= OBJECT_MAX) {
-    context.bytes[tagOffset] = OBJECT_OFFSET + length;
+    state.data[tagOffset] = OBJECT_OFFSET + length;
   } else {
-    context.bytes[tagOffset] = ZOBJECT_TAG;
-    context.bytes[context.index++] = ZERO;
+    state.data[tagOffset] = ZOBJECT_TAG;
+    state.data[state.index++] = ZERO;
   }
 
   for (const key of keys) {
-    writeAny(context, options, getValue(value, key));
+    writeAny(state, options, getValue(value, key));
   }
 };
 
 export const readClass = (
-  context: ReadState,
+  state: ReadState,
   options: Options,
   index: number
 ): RecordOrMap => {
-  const classKeys = context.classes[index];
-  const output = createObject(context, options);
+  const classKeys = state.classes[index];
+  const output = createObject(state, options);
   for (const key of classKeys) {
-    setValue(output, key, readAny(context, options));
+    setValue(options, output, key, readAny(state, options));
   }
   return output;
 };
 
-export const readZObject = (context: ReadState, options: Options) => {
+export const readZObject = (state: ReadState, options: Options) => {
   const keys: string[] = [];
   while (true) {
-    if (context.bytes[context.index] === ZERO) {
-      context.index++;
+    if (state.data[state.index] === ZERO) {
+      state.index++;
       break;
     }
-    keys.push(decodeCString(context));
+    keys.push(decodeCString(state));
   }
-  context.classes.push(keys);
+  state.classes.push(keys);
 
-  const output = createObject(context, options);
+  const output = createObject(state, options);
   for (const key of keys) {
-    setValue(output, key, readAny(context, options));
+    setValue(options, output, key, readAny(state, options));
   }
 
   return output;
 };
 
 export const readObjectWithLength = (
-  context: ReadState,
+  state: ReadState,
   options: Options,
   length: number
 ): RecordOrMap => {
   const keys = new Array<string>(length);
   for (let i = 0; i < length; i++) {
-    keys[i] = decodeCString(context);
+    keys[i] = decodeCString(state);
   }
-  context.classes.push(keys);
-  const output = createObject(context, options);
+  state.classes.push(keys);
+  const output = createObject(state, options);
 
   for (const key of keys) {
-    setValue(output, key, readAny(context, options));
+    setValue(options, output, key, readAny(state, options));
   }
   return output;
 };

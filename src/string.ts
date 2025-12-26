@@ -1,50 +1,43 @@
 import { STRING_MAX, STRING_OFFSET, ZSTRING_TAG, ZERO } from "./layout";
 import type { ReadState, WriteState } from "./common";
-import { ensureCapacity } from "./common";
+import { ensureCapacity, builtinDecodeUtf8, builtinEncodeUtf8 } from "./common";
+import { decodeUtf8, encodeUtf8 } from "./utf8";
 
-export const decodeCString = (context: ReadState): string => {
-  const start = context.index;
-  while (context.bytes[context.index] !== 0) {
-    context.index++;
+export const decodeCString = (state: ReadState): string => {
+  const start = state.index;
+  while (state.data[state.index] !== 0) {
+    state.index++;
   }
-  const keyBytes = context.bytes.slice(start, context.index);
-  context.index++;
-  return new TextDecoder().decode(keyBytes);
+  const out = decodeUtf8(state.data, start, state.index);
+  state.index++;
+  return out;
 };
 
-export const encodeCString = (context: WriteState, value: string) => {
-  const strBytes = new TextEncoder().encode(value);
-  ensureCapacity(context, strBytes.length + 1);
-  context.bytes.set(strBytes, context.index);
-  context.index += strBytes.length;
-  context.bytes[context.index++] = 0;
+export const encodeCString = (state: WriteState, value: string) => {
+  ensureCapacity(state, value.length * 4 + 1);
+  state.index += encodeUtf8(state.data, state.index, value);
+  state.data[state.index++] = 0;
 };
 
 export const decodeStringOfLength = (
-  context: ReadState,
+  state: ReadState,
   length: number
 ): string => {
-  const strBytes = context.bytes.slice(
-    context.index,
-    context.index + length
-  );
-  context.index += length;
-  return new TextDecoder().decode(strBytes);
+  const out = decodeUtf8(state.data, state.index, state.index + length);
+  state.index += length;
+  return out;
 };
 
-export const encodeString = (context: WriteState, value: string) => {
-  const strBytes = new TextEncoder().encode(value);
+export const encodeString = (state: WriteState, value: string) => {
+  ensureCapacity(state, value.length * 4 + 2);
+  const start = state.index++;
+  const length = encodeUtf8(state.data, state.index, value);
+  state.index += length;
 
-  if (strBytes.length <= STRING_MAX) {
-    ensureCapacity(context, strBytes.length + 1);
-    context.bytes[context.index++] = STRING_OFFSET + strBytes.length;
-    context.bytes.set(strBytes, context.index);
-    context.index += strBytes.length;
+  if (length <= STRING_MAX) {
+    state.data[start] = STRING_OFFSET + length;
   } else {
-    ensureCapacity(context, strBytes.length + 2);
-    context.bytes[context.index++] = ZSTRING_TAG;
-    context.bytes.set(strBytes, context.index);
-    context.index += strBytes.length;
-    context.bytes[context.index++] = ZERO;
+    state.data[start] = ZSTRING_TAG;
+    state.data[state.index++] = ZERO;
   }
 };

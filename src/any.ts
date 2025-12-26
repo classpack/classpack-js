@@ -14,15 +14,17 @@ import {
   OBJECT_OFFSET,
   STRING_OFFSET,
   ARRAY_OFFSET,
-  DATE_TAG,
-  BYTES_TAG,
   REF_TAG,
+  EXT_MAX,
+  EXT_OFFSET,
+  BIGINT_TAG,
 } from "./layout";
 import {
   type WriteState,
   type ReadState,
   type Options,
   unzigzag,
+  ensureCapacity,
 } from "./common";
 import { writeNumber, readVarint, readFloat32, readFloat64 } from "./number";
 import {
@@ -32,85 +34,97 @@ import {
   readObjectWithLength,
 } from "./object";
 import { encodeString, decodeCString, decodeStringOfLength } from "./string";
-import { readDate, writeDate } from "./date";
-import { readBytes, writeBytes } from "./bytes";
 import { readRef } from "./ref";
+import { readBigint, writeBigint } from "./bigint";
 
-export const writeAny = (context: WriteState, options: Options, value: any) => {
+export const writeAny = (state: WriteState, options: Options, value: any) => {
   switch (typeof value) {
-    case "boolean":
-      context.bytes[context.index++] = value ? TRUE_CONST : FALSE_CONST;
-      break;
     case "string":
-      encodeString(context, value);
+      encodeString(state, value);
       break;
     case "number":
-      writeNumber(context, options, value);
-      break;
-    case "undefined":
-      context.bytes[context.index++] = NULL_CONST;
+      writeNumber(state, options, value);
       break;
     case "object":
       if (value === null) {
-        context.bytes[context.index++] = NULL_CONST;
+        state.data[state.index++] = NULL_CONST;
       } else if (Array.isArray(value)) {
-        writeArray(context, options, value);
-      } else if (value instanceof Date) {
-        writeDate(context, value);
-      } else if (value instanceof Uint8Array) {
-        writeBytes(context, value);
+        writeArray(state, options, value);
       } else {
-        writeObject(context, options, value);
+        for (let i = 0; i < EXT_MAX; i++) {
+          const ext = options.exts[i];
+          if (ext && value instanceof ext?.target) {
+            ensureCapacity(state, 1);
+            state.data[state.index++] = EXT_OFFSET + i;
+            ext.write(state, options, value);
+            return;
+          }
+        }
+        writeObject(state, options, value);
       }
       break;
+    case "boolean":
+      state.data[state.index++] = value ? TRUE_CONST : FALSE_CONST;
+      break;
+    case "bigint":
+      writeBigint(state, value);
+      break;
+    case "undefined":
+      state.data[state.index++] = NULL_CONST;
+      break;
+
     default:
       throw new Error("Unsupported value type");
   }
 };
 
-export const readAny = (context: ReadState, options: Options): any => {
-  const tag = context.bytes[context.index];
+export const readAny = (state: ReadState, options: Options): any => {
+  const tag = state.data[state.index];
 
   if (tag >= SINT_OFFSET) {
-    return unzigzag(readVarint(context) - SINT_OFFSET);
+    return unzigzag(readVarint(state) - SINT_OFFSET);
   }
 
-  context.index++;
+  state.index++;
 
   switch (tag) {
     case ZERO:
-      throw new Error("Unexpected sentinel at " + (context.index - 1));
+      throw new Error("Unexpected sentinel at " + (state.index - 1));
     case NULL_CONST:
-      return options.preferNull ? null : undefined;
+      return null;
     case TRUE_CONST:
       return true;
     case FALSE_CONST:
       return false;
     case FLOAT32_TAG:
-      return readFloat32(context);
+      return readFloat32(state);
     case FLOAT64_TAG:
-      return readFloat64(context);
+      return readFloat64(state);
     case ZSTRING_TAG:
-      return decodeCString(context);
+      return decodeCString(state);
     case ZARRAY_TAG:
-      return readZArray(context, options);
+      return readZArray(state, options);
     case ZOBJECT_TAG:
-      return readZObject(context, options);
+      return readZObject(state, options);
     case REF_TAG:
-      return readRef(context, options);
-    case BYTES_TAG:
-      return readBytes(context);
-    case DATE_TAG:
-      return readDate(context);
+      return readRef(state, options);
+    case BIGINT_TAG:
+      return readBigint(state);
   }
 
-  if (tag < CLASS_OFFSET) {
-    return readObjectWithLength(context, options, tag - OBJECT_OFFSET);
+  if (tag < OBJECT_OFFSET) {
+    const ext = options.exts[tag - EXT_OFFSET];
+    if (!ext) {
+      throw new Error("Unknown extension tag: " + tag);
+    }
+    return ext.read(state, options);
+  } else if (tag < CLASS_OFFSET) {
+    return readObjectWithLength(state, options, tag - OBJECT_OFFSET);
   } else if (tag < STRING_OFFSET) {
-    return readClass(context, options, tag - CLASS_OFFSET);
+    return readClass(state, options, tag - CLASS_OFFSET);
   } else if (tag < ARRAY_OFFSET) {
-    return decodeStringOfLength(context, tag - STRING_OFFSET);
+    return decodeStringOfLength(state, tag - STRING_OFFSET);
   } else if (tag < SINT_OFFSET) {
-    return readArrayOfLength(context, options, tag - ARRAY_OFFSET);
+    return readArrayOfLength(state, options, tag - ARRAY_OFFSET);
   }
 };

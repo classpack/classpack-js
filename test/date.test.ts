@@ -1,8 +1,8 @@
-import { Classpack } from "../src";
+import { ClassPack, DATE_EXT } from "../src";
 import { describe, it, expect } from "bun:test";
 
 describe("Date encoding/decoding", () => {
-  const classpack = new Classpack();
+  const classpack = new ClassPack({ exts: [DATE_EXT] });
 
   const dates = [
     new Date(0),
@@ -14,8 +14,8 @@ describe("Date encoding/decoding", () => {
 
   for (const date of dates) {
     it(`encodes and decodes date: ${date.toISOString()}`, () => {
-      const encoded = classpack.encode(date);
-      const decoded = classpack.decode(encoded);
+      const encoded = classpack.pack(date);
+      const decoded = classpack.unpack(encoded);
       expect(decoded instanceof Date).toBe(true);
       expect(decoded.getTime()).toBe(date.getTime());
     });

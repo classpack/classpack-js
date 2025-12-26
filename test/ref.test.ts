@@ -1,8 +1,8 @@
-import { Classpack } from "../src";
+import { ClassPack } from "../src";
 import { describe, it, expect } from "bun:test";
 
 describe("Graph encoding/decoding", () => {
-  const classpack = new Classpack();
+  const classpack = new ClassPack();
 
   it(`encodes and decodes cyclic object graph`, () => {
     type Vertex = {
@@ -24,8 +24,8 @@ describe("Graph encoding/decoding", () => {
       }
     }
 
-    const encoded = classpack.encode(vertices);
-    const decoded = classpack.decode(encoded);
+    const encoded = classpack.pack(vertices);
+    const decoded = classpack.unpack(encoded);
 
     expect(decoded).toEqual(vertices);
   });
@@ -34,8 +34,8 @@ describe("Graph encoding/decoding", () => {
     const arr: any[] = [];
     arr.push(arr);
 
-    const encoded = classpack.encode(arr);
-    const decoded = classpack.decode(encoded);
+    const encoded = classpack.pack(arr);
+    const decoded = classpack.unpack(encoded);
 
     expect(decoded).toEqual(arr);
   });
